@@ -28,7 +28,7 @@ def main(argv):
 	    img = img2.reshape(28,28,-1);
 	else:
 	    img = img.reshape(28,28,-1);
-	img = img/256.0
+	img = img/255.0
 	out = net.forward_all(data=np.asarray([img.transpose(2,0,1)]))
 	pred = out.values()[0]
 	for s in pred[0]:
@@ -36,9 +36,9 @@ def main(argv):
 	print "Prediction:", pred.argmax()
 
 	print_3d_feat(net, "conv1")	
-	print_3d_feat(net, "pool1")	
+	print_pool_feat(net, "pool1", "0000", 4)	
 	print_3d_feat(net, "conv2")
-	print_3d_feat(net, "pool2")
+	print_pool_feat(net, "pool2", "0000", 0)
 	print_1d_feat(net, "ip1")
 	print_1d_feat(net, "ip2")
 	print_1d_feat(net, "prob")
@@ -79,16 +79,49 @@ def print_3d_feat(net, layer):
 			for w in range(col):
 				tf.write("%.10f\n" % data[n][h][w])
 				t = data[n][h][w]
-				qmn = q.toQmn(t, 1, 15)
+				qmn = q.toQmn(t, 5, 11)
 				if t < 0:
 					bin = q.twosComplementBin(qmn)
 				else:
 					bin = q.to16BitBin(qmn)
 				bhex = q.bin2hex(bin)
 				qmntf.write(bhex)				
-				qmntf.write("\n")				
+				qmntf.write("\n")			
 			tf.write("\n")
 		tf.write("\n")	
+	tf.close()
+
+def print_pool_feat(net, layer, pad, npad):
+	print "Printing:", layer
+	data = net.blobs[layer].data[0]
+	print "Shape:", data.shape 
+	no = data.shape[0]
+	row = data.shape[1]
+	col = data.shape[2]
+	filename = "txtdata/" + layer + ".txt"
+	qmnfile = "txtdata/" + layer + ".qmn"
+	tf = open(filename, 'w')
+	qmntf = open(qmnfile, 'w')
+	for n in range(no):
+		for h in range(row):
+			for w in range(col):
+				tf.write("%.10f\n" % data[n][h][w])
+				t = data[n][h][w]
+				qmn = q.toQmn(t, 5, 11)
+				if t < 0:
+					bin = q.twosComplementBin(qmn)
+				else:
+					bin = q.to16BitBin(qmn)
+				bhex = q.bin2hex(bin)
+				qmntf.write(bhex)				
+				qmntf.write("\n")
+                        for np in range(npad):
+                            tf.write(pad)
+                            tf.write("\n")				
+                            qmntf.write(pad)
+                            qmntf.write("\n")				
+			#tf.write("\n")
+		#tf.write("\n")	
 	tf.close()
 
 def print_1d_feat(net, layer):
@@ -97,11 +130,23 @@ def print_1d_feat(net, layer):
 	print "Shape:", data.shape 
 	no = data.shape[0]
 	filename = "txtdata/" + layer + ".txt"
+	qmnfile = "txtdata/" + layer + ".qmn"
 	tf = open(filename, 'w')
+	qmntf = open(qmnfile, 'w')
 	for n in range(no):
 		tf.write("%.10f\n" % data[n])
-	tf.write("\n")	
+		t = data[n]
+		qmn = q.toQmn(t, 5, 11)
+		if t < 0:
+			bin = q.twosComplementBin(qmn)
+		else:
+			bin = q.to16BitBin(qmn)
+		bhex = q.bin2hex(bin)
+		qmntf.write(bhex)				
+		qmntf.write("\n")
+	#tf.write("\n")	
 	tf.close()
+        qmntf.close()
 	
 	
 if __name__ == "__main__":
