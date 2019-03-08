@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/local/workspace/tools/anaconda2/bin/python2.7
 import os
 import struct
 import sys
@@ -8,6 +8,9 @@ import cv2
 os.environ["GLOG_minloglevel"] = "1"
 import caffe
 import qmn as q
+
+M = 9
+N = 7 
 
 def main(argv):
 	parser = argparse.ArgumentParser()
@@ -79,7 +82,7 @@ def print_3d_feat(net, layer):
 			for w in range(col):
 				tf.write("%.10f\n" % data[n][h][w])
 				t = data[n][h][w]
-				qmn = q.toQmn(t, 5, 11)
+				qmn = q.toQmn(t, M, N)
 				if t < 0:
 					bin = q.twosComplementBin(qmn)
 				else:
@@ -107,7 +110,7 @@ def print_pool_feat(net, layer, pad, npad):
 			for w in range(col):
 				tf.write("%.10f\n" % data[n][h][w])
 				t = data[n][h][w]
-				qmn = q.toQmn(t, 5, 11)
+				qmn = q.toQmn(t, M, N)
 				if t < 0:
 					bin = q.twosComplementBin(qmn)
 				else:
@@ -136,7 +139,7 @@ def print_1d_feat(net, layer):
 	for n in range(no):
 		tf.write("%.10f\n" % data[n])
 		t = data[n]
-		qmn = q.toQmn(t, 5, 11)
+		qmn = q.toQmn(t, M, N)
 		if t < 0:
 			bin = q.twosComplementBin(qmn)
 		else:

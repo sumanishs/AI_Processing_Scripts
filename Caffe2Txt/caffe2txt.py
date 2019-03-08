@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/local/workspace/tools/anaconda2/bin/python2.7
 import os
 import struct
 import sys
@@ -11,6 +11,8 @@ import caffe
 
 
 np.set_printoptions(threshold='nan')
+M = 9		#Qm.n
+N = 7		#Qm.n
 #MODEL_FILE = 'lenet.prototxt'
 #PRETRAIN_FILE = 'lenet_iter_10000.caffemodel'
 
@@ -42,12 +44,15 @@ def bin2hex(binstr):
 	return tmp
 
 def to16BitBin(number):
-	print "Number to convert:", number
+	#print "Number to convert:", number
 	binary = '{0:016b}'.format(number)
-	print binary
+	#print binary
 	return binary
 
 def twosComplementBin(number):
+	
+	if number == 0:
+		return "0000000000000000"
 	binint = '{0:016b}'.format(number) #convert to binary
 	tc = findTwoscomplement(binint)
 	return tc
@@ -169,7 +174,7 @@ def conv_layer_data_hex(weight, bias, tf, args, opchlist):
 				if args.qmn:
 					t = bias[bwidx]
 					print "Actual CB:", t
-					qmn = toQmn(t, 5, 11)
+					qmn = toQmn(t, M, N)
 					if t < 0:
 						bin = twosComplementBin(qmn)
 					else:
@@ -243,7 +248,7 @@ def write_conv_weights(data, tf, args):
 			if args.qmn:
 				t = data[x][y]
 				print "Actual CW:", t
-				qmn = toQmn(t, 5, 11)
+				qmn = toQmn(t, M, N)
 				if t < 0:
 					bin = twosComplementBin(qmn)
 				else:
@@ -292,6 +297,91 @@ def write_data_float(tf, data, bytes):
 		tf.write("%f" % data)
 		tf.write('\n')
 
+def ip_layer_data_hex_reorder(weight, bias, tf, args):		
+	numOutCh = weight.shape[0]
+	print "Output channels:", numOutCh
+	neurons = weight.shape[1]
+	print "Neurons:", neurons
+	nPE = 8
+	sets = numOutCh / nPE
+	if numOutCh % nPE > 0:
+		sets = sets + 1
+	print "Data sets:", sets
+	print "Bias.shape:", bias.shape
+	x2 = np.empty((neurons, sets, nPE), dtype=object)	#2 data sets, 8 PF
+	#print x2
+	currset = 0
+	currdataidx = 0
+	for bwidx in range(numOutCh):
+		wtd=weight[bwidx]
+		wx = wtd.shape[0]
+		print "wx:", wx
+		for x in range(wx):
+			t = wtd[x]
+			print "Actual IW:", t
+			qmn = toQmn(t, M, N)
+			if t < 0:
+				bin = twosComplementBin(qmn)
+			else:
+				bin = to16BitBin(qmn)
+			whex = bin2hex(bin)
+			print "whex:", whex, ", bin:", bin
+			whex = whex[:4]
+			print whex, "currset:", currset, ", bwidx:", bwidx, ", x:", x, ", currdataidx:", currdataidx
+			x2[x, currset, currdataidx ] = whex
+		currdataidx = currdataidx + 1
+		if currdataidx >= nPE:
+			currdataidx = 0
+			currset = currset + 1	
+
+			#if bwidx < nPE:
+			#	x2[x, 0, bwidx % nPE ] = whex	
+			#else:
+			#	x2[x, 1, bwidx % nPE ] = whex
+	
+	print "#IP Data"
+	print x2	
+	tf.write("#IP Data\n")
+	b = 0
+	bshape = bias.shape[0]
+	for st in range(sets):	
+		for x in range(nPE):
+			if b+x < bshape:
+				bd = bias[b+x]
+				print "Actual IB:", bd
+				bqmn = toQmn(bd, M, N)
+				if bd < 0:
+					bbin = twosComplementBin(bqmn)
+				else:
+					bbin = to16BitBin(bqmn)
+				bhex = bin2hex(bbin)
+				print "bhex:", bhex, ", bin:", bbin
+				bhex = bhex[:4]
+				#tf.write(bhex)
+				#tf.write("\n")
+				bp1 = bhex[:2]
+				bp2 = bhex[2:]
+				write_data_lsb_msb(tf, bp1, bp2, 1, args)		#Write first 2 bytes bias
+			else:
+				#tf.write("0000\n")
+				write_data_lsb_msb(tf, "00", "00", 1, args)		#Write first 2 bytes bias
+		b = b + nPE	
+		for x in range(neurons):
+			for d in range(nPE):
+				if x2[x, st, d] is None:
+					print "0000"
+					#tf.write("0000\n")
+					write_data_lsb_msb(tf, "00", "00", 1, args)		#Write first 2 bytes bias
+				else:
+					print x2[x, st, d] 	
+					#tf.write(x2[x, st, d])
+					#tf.write("\n")
+					wh = x2[x, st, d]
+					bp1 = wh[:2]
+					bp2 = wh[2:]
+					write_data_lsb_msb(tf, bp1, bp2, 1, args)		#Write first 2 bytes bias
+	
+	
 def ip_layer_data_hex(weight, bias, tf, args, opchlist, inW, inH):
 	print "Dumping IP Layer Data HEX Bias + Weight"
 	numIPCh = opchlist.pop()
@@ -324,7 +414,7 @@ def ip_layer_data_hex(weight, bias, tf, args, opchlist, inW, inH):
 			if args.qmn:
 				t = bias[bwidx]
 				print "Actual IB:", t
-				qmn = toQmn(t, 5, 11)
+				qmn = toQmn(t, M, N)
 				if t < 0:
 					bin = twosComplementBin(qmn)
 				else:
@@ -399,7 +489,7 @@ def write_ip_weights(data, tf, args):
 		if args.qmn:
 			t = data[x]
 			print "Actual IW:", t
-			qmn = toQmn(t, 5, 11)
+			qmn = toQmn(t, M, N)
 			if t < 0:
 				bin = twosComplementBin(qmn)
 			else:
@@ -433,7 +523,7 @@ def main(argv):
 	parser.add_argument('-b','--bias', help='bias to add (ZERO/ACT (default ZERO))', default='ZERO', required=False)
 	parser.add_argument('-f','--outfmt', help='output format(HEX/TXT/SIMFLOAT (default HEX))', default='HEX', required=False)
 	parser.add_argument('-t','--type', help='Type of output data for (SIMULATION/BOARD (default SIMULATION))', default='SIMULATION', required=False)
-	parser.add_argument("--qmn", help="Convert to Q5.11", action="store_true")
+	parser.add_argument("--qmn", help="Convert to Q1.15", action="store_true")
 	args = parser.parse_args()
 	print "Caffemodel Weights File:", args.weights
 	print "Prototxt File:", args.prototxt
@@ -464,9 +554,11 @@ def main(argv):
 			if param_name.startswith("conv"):
 				conv_layer_data_hex(weight, bias, tf, args, outchannellist)
 			if param_name.startswith("ip1"):
-				ip_layer_data_hex(weight, bias, tf, args, outchannellist, 4, 4)
+				#ip_layer_data_hex(weight, bias, tf, args, outchannellist, 4, 4)
+				ip_layer_data_hex_reorder(weight, bias, tf, args)
 			if param_name.startswith("ip2"):
-				ip_layer_data_hex(weight, bias, tf, args, outchannellist, 1, 1)
+				#ip_layer_data_hex(weight, bias, tf, args, outchannellist, 1, 1)
+				ip_layer_data_hex_reorder(weight, bias, tf, args)
 		elif args.outfmt == "SIMFLOAT":		
 			if param_name.startswith("conv"):
 				conv_layer_data_simfloat(weight, bias, tf, args, outchannellist)

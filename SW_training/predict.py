@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/local/workspace/tools/anaconda2/bin/python2.7
 import os
 import struct
 import sys
