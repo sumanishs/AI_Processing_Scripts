@@ -3,3 +3,4 @@
 - MNIST_IDX3_2_TXT  : Script to convert MNIST idx3 to readable text format
 - MNIST_TXT_2_IMG  : C program to convert MNIST text data to actual *.bmp image
 - SW_training : Caffe prediction and feature extraction python scripts 
+- cifar-10_image_extract : Image extractor from cifar-10 dataset
