@@ -1,5 +1,7 @@
 #!/usr/bin/python2.7
 import os
+import sys
+import argparse
 import numpy as np
 os.environ["GLOG_minloglevel"] = "1"
 import caffe
@@ -19,19 +21,32 @@ label_map[9] = "truck"
 CAFFE_PATH = "/home/sumanish/AI_CNN_FPGA/caffe/"
 MEAN_PATH = CAFFE_PATH + "examples/cifar10/mean.binaryproto"
 PROTOTXT = CAFFE_PATH + "examples/cifar10/cifar10_full.prototxt"
-WEIGHT = CAFFE_PATH + "examples/cifar10/cifar10_full_iter_10000.caffemodel"
-INPUT_IMG = "/home/sumanish/AI_CNN_FPGA/cifar-10/data_batch_1/bird_2.png" 
+WEIGHT = CAFFE_PATH + "examples/cifar10/cifar10_full_iter_60000.caffemodel"
+INPUT_IMG = "/home/sumanish/AI_CNN_FPGA/cifar-10/data_batch_1/bird_3.png" 
 
-blob = caffe.proto.caffe_pb2.BlobProto()
-data = open( MEAN_PATH , 'rb' ).read()
-blob.ParseFromString(data)
-arr = np.array( caffe.io.blobproto_to_array(blob) )
+def main(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i','--infile', help='Input file', required=True)
+    parser.add_argument('-p','--prototxt', help='Net model prototxt', required=True)
+    parser.add_argument('-w','--weights', help='Weight file', required=True)
+    parser.add_argument('-m','--meanfile', help='Mean file', required=True)
+    args = parser.parse_args()
+    print "Input file:", args.infile
+    print "Net model prototxt:", args.prototxt
+    print "Weights file:", args.weights
+    print "Mean file:", args.meanfile
+    caffe.set_mode_cpu()
+    blob = caffe.proto.caffe_pb2.BlobProto()
+    data = open( args.meanfile , 'rb' ).read()
+    blob.ParseFromString(data)
+    arr = np.array( caffe.io.blobproto_to_array(blob) )
+    
+    net = caffe.Classifier(args.prototxt, args.weights, image_dims=(32, 32), mean=arr[0], raw_scale=255 )
+    out = net.predict( [ caffe.io.load_image(args.infile) ])
+    for s in range(out.shape[1]):
+        print "%.10f" % out[0][s]
+    print "Prediction:", out[0].argmax(), ":",  label_map[out[0].argmax()]
 
-net = caffe.Classifier(PROTOTXT, WEIGHT, image_dims=(32, 32), mean=arr[0], raw_scale=255 )
-out = net.predict( [ caffe.io.load_image(INPUT_IMG) ])
-print out
-print out.shape
-for s in range(out.shape[1]):
-    print out[0][s]
-print "Prediction:", out[0].argmax(), ":",  label_map[out[0].argmax()]
 
+if __name__ == "__main__":
+    main(sys.argv)
