@@ -35,6 +35,7 @@ def main(argv):
             validation_data = (test_images, test_labels))
             
     model.save_weights('training_1/mycheckpoints')
+    model.save('training_1/my_model.h5')
     #model.fit(train_images, train_labels, epochs = 5)
     loss, acc = model.evaluate(test_images, test_labels)
     print ("Loss:", loss)
